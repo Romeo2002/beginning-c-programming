@@ -1,0 +1,85 @@
+#include <iostream>
+#include <string>
+#include <Windows.h>
+#include <vector>
+#include <tuple>
+#include <algorithm>
+#include <iomanip>
+
+using namespace std;
+
+
+struct file_size {
+	unsigned int high;
+	unsigned int low;
+};
+
+using file_info = tuple<string, file_size>;
+
+ostream& operator<< (ostream& os, const file_size fs) {
+	int flags = os.flags();
+	unsigned long long ll = fs.low + ((unsigned long long) fs.high << 32);
+	cout << hex << ll;
+	os.setf(flags);
+	return os;
+}
+
+bool operator>(const file_size& lhs, const file_size& rhs)
+{
+	if (lhs.high > rhs.high) return true;
+	if (lhs.high == rhs.high) {
+		if (lhs.low > rhs.low) return true;
+	}
+	return false;
+}
+
+void file_in_folder(const char* FolderPath, vector<file_info>& files) {
+	string folder(FolderPath);
+	folder += "\\*";
+	WIN32_FIND_DATAA findfiledata {};
+	void* hFile = FindFirstFileA(folder.c_str(), &findfiledata);
+
+	if (INVALID_HANDLE_VALUE != hFile) {
+		do {
+			string finditem(FolderPath);
+			finditem += "\\";
+			finditem += findfiledata.cFileName;
+			if ((findfiledata.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0) {
+				// This is a Folder
+				string folder(findfiledata.cFileName);
+				if ((folder != ".") && (folder != "..")) {
+					cout << finditem << endl;
+					file_in_folder(finditem.c_str(), files);
+				}
+			}
+			else {
+				// This is a File
+				file_size fs{};
+				fs.high = findfiledata.nFileSizeHigh;
+				fs.low = findfiledata.nFileSizeLow;
+				files.push_back(make_tuple(finditem, fs));
+			}
+		} while (FindNextFileA(hFile, &findfiledata));
+		FindClose(hFile);
+	}
+
+}
+
+int main(int argc, char** argv) {
+
+	if (argc < 2) {
+		return 1;
+	}
+
+	vector<file_info> files;
+	file_in_folder(argv[1], files);
+	sort(files.begin(), files.end(),
+		[](const file_info& lhs, const file_info& rhs) {
+			return get<1>(rhs) > get<1>(lhs);
+		});
+
+	for (auto file : files) {
+		cout << setw(16) << get<1>(file) << " " << get<0>(file) << endl;
+	}
+	return 0;
+}
